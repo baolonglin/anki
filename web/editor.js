@@ -288,6 +288,12 @@ function onCutOrCopy() {
     return true;
 }
 
+function setField(idx, html) {
+  console.log(window.getSelection().toString());
+  console.log(html);
+  $("#f1").html(html);
+}
+
 function setFields(fields) {
     var txt = "";
     for (var i = 0; i < fields.length; i++) {

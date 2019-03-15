@@ -71,3 +71,7 @@ body {
 #fields {
     margin-top: 35px;
 }
+
+.lemma {
+    text-align: left;
+}

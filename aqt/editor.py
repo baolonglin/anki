@@ -24,6 +24,8 @@ import aqt
 from bs4 import BeautifulSoup
 import requests
 from anki.sync import AnkiRequestsClient
+import lxml
+import io
 
 pics = ("jpg", "jpeg", "png", "tif", "tiff", "gif", "svg", "webp")
 audio =  ("wav", "mp3", "ogg", "flac", "mp4", "swf", "mov", "mpeg", "mkv", "m4a", "3gp", "spx", "oga", "webm")
@@ -72,6 +74,7 @@ class Editor:
         self.outerLayout.addWidget(self.web, 1)
 
         righttopbtns = list()
+        righttopbtns.append(self._addButton('text_translate', 'translate', _("Language card"), id='translate'))
         righttopbtns.append(self._addButton('text_bold', 'bold', _("Bold text (Ctrl+B)"), id='bold'))
         righttopbtns.append(self._addButton('text_italic', 'italic', _("Italic text (Ctrl+I)"), id='italic'))
         righttopbtns.append(self._addButton('text_under', 'underline', _("Underline text (Ctrl+U)"), id='underline'))
@@ -536,6 +539,136 @@ to a cloze type first, via Edit>Change Note Type."""))
     def _wrapWithColour(self, colour):
         self.web.eval("setFormat('forecolor', '%s')" % colour)
 
+    # Translate
+    ######################################################################
+    def onTranslate(self):
+        def onCallback(val):
+            if val:
+                #TODO: remove hardcode field number
+                self.web.eval("setField('1', '{0}');".format(self._fetchTranslationFromWeb(val)))
+
+        self.web.evalWithCallback("window.getSelection().toString();", onCallback)
+
+    def _fetchTranslationFromWeb(self, word):
+        html = self._fetchFromLexin(word)
+        if html:
+            print('<div><p>Lexin:</p><hr/>{0}</div>'.format(html))
+            return '<div style="text-align:left;"><p>Lexin:</p><hr/>{0}</div>'.format(html)
+        return '<div>Could not found word: <b>{0}</b></div>'.format(word)
+
+    def _fetchFromLexin(self, word):
+        headers = {'Content-Type': 'text/x-gwt-rpc; charset=utf-8', 'X-GWT-Module-Base':'https://lexin.nada.kth.se/lexin/lexin/', 'X-GWT-Permutation': 'D3768B9B02B872BA9A0BC2A915F58F2F'}
+        data = "7|0|7|https://lexin.nada.kth.se/lexin/lexin/|FCDCCA88916BAACF8B03FB48D294BA89|se.jojoman.lexin.lexingwt.client.LookUpService|lookUpWord|se.jojoman.lexin.lexingwt.client.LookUpRequest/682723451|swe_swe|{0}|1|2|3|4|1|5|5|1|6|1|7|".format(word)
+        r = requests.post('https://lexin.nada.kth.se/lexin/lexin/lookupword', headers=headers, data=data)
+        if r.status_code != 200:
+            showWarning(_("Unexpected response code: %s") % r.status_code)
+            return None
+        print(r.text)
+        if r.text.startswith("//OK"):
+            xinvalid = re.compile(r'\\x([0-9a-fA-F]{2})')
+            def fix_xinvalid(m):
+                return chr(int(m.group(1), 16))
+            def fix(s):
+                return xinvalid.sub(fix_xinvalid, s)
+            json_text = fix(r.text[4:])
+            print(json_text)
+            j = json.loads(json_text)
+            body = j[-3]
+
+            xslt_root = lxml.etree.XML('''\
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" omit-xml-declaration="yes"/>
+  <xsl:template match="/">
+    <div class="lemma">
+      <b>
+        <xsl:value-of select="Lemma/@Value" />
+      </b>
+
+      <xsl:if test="Lemma/Phonetic">
+        <xsl:text> </xsl:text>
+        <a>
+          <xsl:attribute name="href">http://lexin.nada.kth.se/sound/<xsl:value-of select="Lemma/Phonetic/@File" /></xsl:attribute>
+          <small><xsl:value-of select="Lemma/Phonetic" /></small>
+        </a>
+      </xsl:if>
+      <xsl:text> </xsl:text>
+      <xsl:value-of select="Lemma/@Type" />
+
+      <xsl:if test="Lemma/Inflection">
+        <br/>
+        (<xsl:for-each select="Lemma/Inflection">
+        <xsl:value-of select="text()" />
+        <xsl:if test="position() != last()">,</xsl:if>
+        </xsl:for-each>)
+      </xsl:if>
+      <ul>
+        <xsl:for-each select="Lemma/Lexeme">
+          <li>
+            <xsl:choose>
+              <xsl:when test="Comment">
+                <xsl:value-of select="Comment" />
+              </xsl:when>
+              <xsl:when test="Definition">
+                <xsl:value-of select="Definition" />
+              </xsl:when>
+              <xsl:otherwise>Could not find
+              exaplaination</xsl:otherwise>
+            </xsl:choose>
+            <xsl:choose>
+              <xsl:when test="Compound">
+              <br />Compounds:
+              <ul>
+                <xsl:for-each select="Compound">
+                  <li>
+                    <xsl:value-of select="text()" />
+                  </li>
+                </xsl:for-each>
+              </ul></xsl:when>
+            </xsl:choose>
+            <xsl:choose>
+              <xsl:when test="Example">
+              <br />Examples:
+              <ul>
+                <xsl:for-each select="Example">
+                  <li>
+                    <xsl:value-of select="text()" />
+                  </li>
+                </xsl:for-each>
+              </ul></xsl:when>
+            </xsl:choose>
+            <xsl:choose>
+              <xsl:when test="Idiom">
+              <br />Idioms:
+              <ul>
+                <xsl:for-each select="Idiom">
+                  <li>
+                  <b>
+                    <xsl:value-of select="text()" />
+                  </b>:
+                  <xsl:value-of select="Definition" /></li>
+                </xsl:for-each>
+              </ul></xsl:when>
+            </xsl:choose>
+          </li>
+        </xsl:for-each>
+      </ul>
+    </div>
+  </xsl:template>
+</xsl:stylesheet>''')
+            transform = lxml.etree.XSLT(xslt_root)
+            html = ''
+            for element in body:
+                if element.startswith('<Lemma'):
+                    print(element)
+                    root = lxml.etree.parse(io.StringIO(element))
+                    print(root)
+                    html += str(transform(root)).replace('\n', '')
+            print(html)
+            return html
+
+    def _fetchFromFolketsLexikon(self, word):
+        pass
+
     # Audio/video/images
     ######################################################################
 
@@ -808,6 +941,7 @@ to a cloze type first, via Edit>Change Note Type."""))
         fields=onFields,
         cards=onCardLayout,
         bold=toggleBold,
+        translate=onTranslate,
         italic=toggleItalic,
         underline=toggleUnderline,
         super=toggleSuper,

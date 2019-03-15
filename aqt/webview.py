@@ -286,7 +286,7 @@ body {{ zoom: {}; background: {}; {} }}
 <body>{}</body>
 </html>""".format(self.title, self.zoomFactor(), self._getWindowColor().name(),
                   fontspec, widgetspec, head, body)
-        #print(html)
+        print(html)
         self.setHtml(html)
 
     def webBundlePath(self, path):
@@ -303,6 +303,7 @@ body {{ zoom: {}; background: {}; {} }}
         self.evalWithCallback(js, None)
 
     def evalWithCallback(self, js, cb):
+        print("JS: {0}".format(js))
         self._queueAction("eval", js, cb)
 
     def _evalWithCallback(self, js, cb):

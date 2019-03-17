@@ -559,7 +559,8 @@ to a cloze type first, via Edit>Change Note Type."""))
     def _fetchFromLexin(self, word):
         headers = {'Content-Type': 'text/x-gwt-rpc; charset=utf-8', 'X-GWT-Module-Base':'https://lexin.nada.kth.se/lexin/lexin/', 'X-GWT-Permutation': 'D3768B9B02B872BA9A0BC2A915F58F2F'}
         data = "7|0|7|https://lexin.nada.kth.se/lexin/lexin/|FCDCCA88916BAACF8B03FB48D294BA89|se.jojoman.lexin.lexingwt.client.LookUpService|lookUpWord|se.jojoman.lexin.lexingwt.client.LookUpRequest/682723451|swe_swe|{0}|1|2|3|4|1|5|5|1|6|1|7|".format(word)
-        r = requests.post('https://lexin.nada.kth.se/lexin/lexin/lookupword', headers=headers, data=data)
+        print(data)
+        r = requests.post('https://lexin.nada.kth.se/lexin/lexin/lookupword', headers=headers, data=data.encode('utf-8'))
         if r.status_code != 200:
             showWarning(_("Unexpected response code: %s") % r.status_code)
             return None
@@ -593,6 +594,14 @@ to a cloze type first, via Edit>Change Note Type."""))
       </xsl:if>
       <xsl:text> </xsl:text>
       <xsl:value-of select="Lemma/@Type" />
+      <xsl:if test="Lemma/Reference">
+        <xsl:text> </xsl:text>
+        <small><xsl:value-of select="Lemma/Reference/@Type"/></small>
+        <xsl:text> </xsl:text>
+        <b>
+          <xsl:value-of select="Lemma/Reference/@Value"/>
+        </b>
+      </xsl:if>
 
       <xsl:if test="Lemma/Inflection">
         <br/>
@@ -604,16 +613,14 @@ to a cloze type first, via Edit>Change Note Type."""))
       <ul>
         <xsl:for-each select="Lemma/Lexeme">
           <li>
-            <xsl:choose>
-              <xsl:when test="Comment">
-                <xsl:value-of select="Comment" />
-              </xsl:when>
-              <xsl:when test="Definition">
-                <xsl:value-of select="Definition" />
-              </xsl:when>
-              <xsl:otherwise>Could not find
-              exaplaination</xsl:otherwise>
-            </xsl:choose>
+            <xsl:if test="Definition and Comment">
+              <xsl:text disable-output-escaping="yes">&lt;</xsl:text>
+            </xsl:if>
+            <xsl:value-of select="Comment"/>
+            <xsl:if test="Definition and Comment">
+              <xsl:text disable-output-escaping="yes">&gt;</xsl:text>
+            </xsl:if>
+            <xsl:value-of select="Definition"/>
             <xsl:choose>
               <xsl:when test="Compound">
               <br />Compounds:
@@ -636,6 +643,31 @@ to a cloze type first, via Edit>Change Note Type."""))
                 </xsl:for-each>
               </ul></xsl:when>
             </xsl:choose>
+            <xsl:choose>
+              <xsl:when test="Graminfo">
+              <br />Graminfo:
+              <ul>
+                <xsl:for-each select="Graminfo">
+                  <li>
+                    <xsl:value-of select="text()" />
+                  </li>
+                </xsl:for-each>
+              </ul></xsl:when>
+            </xsl:choose>
+            <xsl:if test="Cycle">
+              <br/><xsl:text disable-output-escaping="yes">&lt;</xsl:text><xsl:value-of select="Cycle/Comment"/><xsl:text disable-output-escaping="yes">&gt;</xsl:text><xsl:value-of select="Cycle/Definition"/>
+              <xsl:choose>
+                <xsl:when test="Cycle/Example">
+                  <br /><ul>Examples:
+                  <ul>
+                    <xsl:for-each select="Cycle/Example">
+                      <li>
+                        <xsl:value-of select="text()" />
+                      </li>
+                    </xsl:for-each>
+                </ul></ul></xsl:when>
+              </xsl:choose>
+            </xsl:if>
             <xsl:choose>
               <xsl:when test="Idiom">
               <br />Idioms:
